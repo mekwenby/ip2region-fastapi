@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  ip2region-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ip2region-api
+    restart: unless-stopped
+
+    #  删除 ports 映射（不暴露到宿主机）
+    # ports:
+    #   - "5000:5000"
+
+    volumes:
+      - ./data:/app/data
+
+    environment:
+      - FASTAPI_ENV=production
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - ip2region-network
+
+    # 内存限制 64M
+    mem_limit: 64m
+
+networks:
+  ip2region-network:
+    driver: bridge

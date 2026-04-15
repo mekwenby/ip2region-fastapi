@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ip2region - IP 地理位置查询</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #333;
+        }
+        .container { max-width: 700px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .logo {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: -2px;
+        }
+        .tagline { color: #a0a0a0; font-size: 16px; margin-bottom: 24px; }
+        .stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 32px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 4px; }
+
+        .search-card {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 24px;
+        }
+        .search-box { display: flex; gap: 12px; margin-bottom: 8px; }
+        .search-box input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .search-box input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102,126,234,0.1); }
+        .search-box button {
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .search-box button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102,126,234,0.4); }
+        .search-box button:active { transform: translateY(0); }
+        .hint { font-size: 13px; color: #999; text-align: center; }
+
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            padding: 28px 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: none;
+            margin-bottom: 24px;
+        }
+        .result-card.show { display: block; }
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
+        }
+        .ip-icon { font-size: 24px; }
+        .ip-address { font-size: 24px; font-weight: 700; color: #1a1a2e; font-family: 'Monaco', 'Menlo', monospace; }
+        .result-body { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f8f9fa; border-radius: 10px; }
+        .result-item .icon { font-size: 18px; }
+        .result-item .label { font-size: 12px; color: #888; text-transform: uppercase; }
+        .result-item .value { font-size: 15px; font-weight: 600; color: #333; margin-top: 2px; }
+        .result-item.full-width { grid-column: 1 / -1; }
+
+        .result-error {
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 12px;
+            padding: 20px;
+            color: #c53030;
+            display: none;
+            margin-bottom: 24px;
+        }
+        .result-error.show { display: block; }
+        .result-error .title { font-weight: 600; margin-bottom: 8px; }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            display: none;
+        }
+        .loading.show { display: block; }
+        .loading::after { content: '查询中...'; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .endpoints { background: white; border-radius: 20px; padding: 28px 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .endpoints h3 { font-size: 16px; color: #333; margin-bottom: 16px; }
+        .endpoint { background: #f8f9fa; padding: 16px; border-radius: 10px; margin-bottom: 10px; }
+        .endpoint:last-child { margin-bottom: 0; }
+        .endpoint-method { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px; }
+        .method-get { background: #61affe; color: white; }
+        .method-post { background: #49cc90; color: white; }
+        .endpoint-path { font-family: monospace; font-size: 13px; color: #333; }
+        .endpoint-desc { font-size: 12px; color: #888; margin-top: 6px; }
+
+        /* 移动端适配 */
+        @media (max-width: 480px) {
+            body { padding: 20px 16px; }
+            .logo { font-size: 36px; }
+            .tagline { font-size: 14px; }
+            .stats { gap: 24px; }
+            .stat-value { font-size: 22px; }
+            .search-card { padding: 20px; }
+            .search-box { flex-direction: column; }
+            .search-box button { width: 100%; }
+            .result-card { padding: 20px; }
+            .ip-address { font-size: 20px; }
+            .result-body { grid-template-columns: 1fr; }
+            .result-item { padding: 10px 12px; }
+            .endpoints { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">ip2region</div>
+            <div class="tagline">高性能 IP 地理位置查询服务</div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="total-calls">-</div>
+                    <div class="stat-label">总查询次数</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="cache-info">-</div>
+                    <div class="stat-label">缓存命中</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="search-card">
+            <div class="search-box">
+                <input type="text" id="ip-input" placeholder="输入 IP 地址，如：8.8.8.8">
+                <button type="button" id="search-btn">查询</button>
+            </div>
+            <div class="hint">支持 IPv4/IPv6，按 Enter 键快速查询</div>
+        </div>
+
+        <div class="loading" id="loading"></div>
+
+        <div class="result-card" id="result-card">
+            <div class="result-header">
+                <span class="ip-icon">🌐</span>
+                <span class="ip-address" id="result-ip"></span>
+            </div>
+            <div class="result-body" id="result-body"></div>
+        </div>
+
+        <div class="result-error" id="result-error">
+            <div class="title">查询失败</div>
+            <div id="error-message"></div>
+        </div>
+
+        <div class="endpoints">
+            <h3>接口文档</h3>
+            <div class="endpoint">
+                <span class="endpoint-method method-get">GET</span>
+                <span class="endpoint-path">/api/ip/{ip}</span>
+                <div class="endpoint-desc">查询单个 IP 归属地</div>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method method-post">POST</span>
+                <span class="endpoint-path">/api/ip</span>
+                <div class="endpoint-desc">批量查询 IP 归属地</div>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method method-get">GET</span>
+                <span class="endpoint-path">/health</span>
+                <div class="endpoint-desc">健康检查与缓存状态</div>
+            </div>
+            <h3 style="margin-top:24px;">在线文档</h3>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <a href="/docs" style="flex:1;min-width:140px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;text-decoration:none;padding:16px 20px;border-radius:12px;text-align:center;font-weight:600;">
+                    Swagger UI
+                </a>
+                <a href="/redoc" style="flex:1;min-width:140px;background:linear-gradient(135deg,#e84393 0%,#fd79a8 100%);color:white;text-decoration:none;padding:16px 20px;border-radius:12px;text-align:center;font-weight:600;">
+                    ReDoc
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function debounce(fn, delay) {
+            var timer = null;
+            return function() {
+                var context = this;
+                var args = arguments;
+                clearTimeout(timer);
+                timer = setTimeout(function() {
+                    fn.apply(context, args);
+                }, delay);
+            };
+        }
+
+        var fieldMap = {
+            country: { icon: '🏳️', label: '国家' },
+            province: { icon: '🏛️', label: '省/州' },
+            city: { icon: '🏙️', label: '城市' },
+            isp: { icon: '🏢', label: '运营商' },
+            region_code: { icon: '🔤', label: '区号' }
+        };
+
+        function renderResult(data) {
+            var card = document.getElementById('result-card');
+            var body = document.getElementById('result-body');
+            document.getElementById('result-ip').textContent = data.ip;
+            body.innerHTML = '';
+
+            var fields = ['country', 'province', 'city', 'isp', 'region_code'];
+            fields.forEach(function(key) {
+                if (data[key]) {
+                    var item = document.createElement('div');
+                    item.className = 'result-item';
+                    var info = fieldMap[key] || { icon: '📍', label: key };
+                    item.innerHTML = '<span class="icon">' + info.icon + '</span><div><div class="label">' + info.label + '</div><div class="value">' + data[key] + '</div></div>';
+                    body.appendChild(item);
+                }
+            });
+
+            document.getElementById('loading').classList.remove('show');
+            document.getElementById('result-error').classList.remove('show');
+            card.classList.add('show');
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').classList.remove('show');
+            document.getElementById('result-card').classList.remove('show');
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('result-error').classList.add('show');
+        }
+
+        function refreshStats() {
+            fetch('/health')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    document.getElementById('total-calls').textContent = d.total_calls;
+                    var m = d.cache_info.match(/hits=(\d+)/);
+                    if (m) document.getElementById('cache-info').textContent = m[1];
+                })
+                .catch(function() {});
+        }
+
+        function doSearch() {
+            var ip = document.getElementById('ip-input').value.trim();
+            if (!ip) return;
+
+            document.getElementById('result-card').classList.remove('show');
+            document.getElementById('result-error').classList.remove('show');
+            document.getElementById('loading').classList.add('show');
+
+            fetch('/api/ip/' + encodeURIComponent(ip))
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.code === 200) {
+                        renderResult(data.data);
+                        refreshStats();
+                    } else {
+                        showError(data.message || '查询失败');
+                    }
+                })
+                .catch(function(e) {
+                    showError('请求失败: ' + e.message);
+                });
+        }
+
+        var debouncedSearch = debounce(doSearch, 300);
+
+        document.getElementById('search-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            debouncedSearch();
+        });
+
+        document.getElementById('ip-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                debouncedSearch();
+            }
+        });
+
+        refreshStats();
+
+        // 页面加载时自动查询访客 IP
+        fetch('/api/ip/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ip) {
+                    document.getElementById('ip-input').value = data.ip;
+                    debouncedSearch();
+                }
+            })
+            .catch(function() {});
+    </script>
+</body>
+</html>
